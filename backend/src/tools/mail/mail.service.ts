@@ -4,8 +4,13 @@ import * as nodemailer from 'nodemailer';
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
+  private transporter?: nodemailer.Transporter;
 
   private getTransporter(): nodemailer.Transporter {
+    if (this.transporter) {
+      return this.transporter;
+    }
+
     const host = process.env.SMTP_HOST || 'mail.smtp2go.com';
     const port = Number(process.env.SMTP_PORT) || 2525;
     const isSecure =
@@ -16,10 +21,22 @@ export class MailService {
     const user = process.env.SMTP_USER || 'mis@hgusa.com';
     const pass = process.env.SMTP_PASS || '';
 
-    return nodemailer.createTransport({
+    if (!pass || pass === 'sent via Teams DM') {
+      throw new Error(
+        'SMTP_PASS is not configured. Set the SMTP2GO password in backend/.env.',
+      );
+    }
+
+    this.transporter = nodemailer.createTransport({
       host,
       port,
       secure: isSecure,
+      pool: true,
+      maxConnections: 3,
+      maxMessages: 100,
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 30000,
       auth: {
         user,
         pass,
@@ -28,6 +45,8 @@ export class MailService {
         rejectUnauthorized: false,
       },
     });
+
+    return this.transporter;
   }
 
   async verifyConnection(): Promise<{ success: boolean; message: string }> {
